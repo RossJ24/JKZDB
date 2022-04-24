@@ -5,7 +5,7 @@ import (
 )
 
 type Coordinator struct {
-	// Should map to grpc clients/connections
+	// Should map to grpc clients/connections (Lowkey might need to be a tree)
 	ShardMap      map[string]int
 	IndexedFields map[string]int
 }

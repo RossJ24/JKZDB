@@ -1,10 +1,10 @@
 package db
 
-import boltdb "github.com/boltdb/bolt"
+import "github.com/boltdb/bolt"
 
 type JKZDB struct {
-	db boltdb.DB
-	// Maps Key to Bucket
+	db bolt.DB
+	// Maps Key Type to Bucket (Index, primary, etc.)
 	RangeMap map[string][]byte
 	// Map Indexes to Buckets
 	IndexedFields map[string][]byte
