@@ -1,15 +1,19 @@
 package main
 
 import (
-	server "JKZDB/Coordinator/server"
+	server "JKZDB/coordinator/server"
 	"log"
+
+	"flag"
 
 	fiber "github.com/gofiber/fiber/v2"
 )
 
+var shardConfigPath = flag.String("shard-config", "../shard-config.json", "JSON file representing shard configuration.")
+
 func main() {
 	app := fiber.New()
-	coordinator, err := server.NewCoordinator("")
+	coordinator, err := server.NewCoordinator(*shardConfigPath)
 	if err != nil {
 		log.Fatal("Could not start server.\n")
 	}
