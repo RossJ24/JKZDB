@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package db;
+
+option go_package = "JKZDB/db/proto";
+
+
+message SetEntryPrepareRequest {
+    string key = 1;
+}
+
+message SetEntryPrepareResponse {}
+
+message SetEntryCommitRequest {
+    string key = 1;
+    string field = 2;
+    string value = 3;
+}
+
+message SetEntryCommitResponse {}
+
+message GetEntryByIdRequest{
+    string id = 1;
+}
+
+message GetEntryByIdResponse{
+    string entry = 1;
+}
+
+// For retrieving the id of a row using an indexed field.
+message GetEntryByFieldRequest{
+    string field = 1;
+    string key = 2;
+}
+
+message GetEntryByFieldResponse{
+    string entry = 1;
+}
+
+service JKZDB {
+    rpc SetEntryPrepare(SetEntryPrepareRequest) returns(SetEntryPrepareResponse);
+
+    rpc SetEntryCommit(SetEntryCommitRequest) returns(SetEntryCommitResponse);
+
+    rpc GetEntryById(GetEntryByIdRequest) returns(GetEntryByIdResponse);
+
+    rpc GetEntryByField(GetEntryByFieldRequest) returns(GetEntryByFieldResponse);
+}

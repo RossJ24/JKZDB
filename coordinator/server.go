@@ -17,7 +17,7 @@ func main() {
 		return ctx.Next()
 	})
 	api.Get("", coordinator.GetHandler)
-	api.Post("", coordinator.PostHandler)
+	api.Put("", coordinator.PutHandler)
 	api.Delete("", coordinator.DeleteHandler)
 
 }
