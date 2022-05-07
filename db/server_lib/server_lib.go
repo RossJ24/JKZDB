@@ -13,8 +13,8 @@ type JKZDBServer struct {
 	mx    sync.RWMutex
 }
 
-func MakeJKZDBServer() (*JKZDBServer, error) {
-	jkzdb, err := db.CreateJKZDB()
+func MakeJKZDBServer(port int) (*JKZDBServer, error) {
+	jkzdb, err := db.CreateJKZDB(port)
 	if err != nil {
 		return nil, err
 	}
@@ -32,6 +32,6 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, in *pb.SetEntryCo
 func (server *JKZDBServer) GetEntryById(ctx context.Context, in *pb.GetEntryByIdRequest) (*pb.GetEntryByIdResponse, error) {
 	return nil, nil
 }
-func (server *JKZDBServer) GetEntryByField(ctx context.Context, in *pb.GetEntryByFieldRequest) (*pb.GetEntryByFieldResponse, error) {
+func (server *JKZDBServer) GetEntryByIndexedField(ctx context.Context, in *pb.GetEntryByIndexedFieldRequest) (*pb.GetEntryByIndexedFieldResponse, error) {
 	return nil, nil
 }

@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v3.19.4
-// source: proto/db.proto
+// source: db/proto/db.proto
 
 package proto
 
@@ -24,8 +24,9 @@ const _ = grpc.SupportPackageIsVersion7
 type JKZDBClient interface {
 	SetEntryPrepare(ctx context.Context, in *SetEntryPrepareRequest, opts ...grpc.CallOption) (*SetEntryPrepareResponse, error)
 	SetEntryCommit(ctx context.Context, in *SetEntryCommitRequest, opts ...grpc.CallOption) (*SetEntryCommitResponse, error)
+	SetEntryAbort(ctx context.Context, in *SetEntryAbortRequest, opts ...grpc.CallOption) (*SetEntryAbortResponse, error)
 	GetEntryById(ctx context.Context, in *GetEntryByIdRequest, opts ...grpc.CallOption) (*GetEntryByIdResponse, error)
-	GetEntryByField(ctx context.Context, in *GetEntryByFieldRequest, opts ...grpc.CallOption) (*GetEntryByFieldResponse, error)
+	GetEntryByField(ctx context.Context, in *GetEntryByIndexedFieldRequest, opts ...grpc.CallOption) (*GetEntryByIndexedFieldResponse, error)
 }
 
 type jKZDBClient struct {
@@ -54,6 +55,15 @@ func (c *jKZDBClient) SetEntryCommit(ctx context.Context, in *SetEntryCommitRequ
 	return out, nil
 }
 
+func (c *jKZDBClient) SetEntryAbort(ctx context.Context, in *SetEntryAbortRequest, opts ...grpc.CallOption) (*SetEntryAbortResponse, error) {
+	out := new(SetEntryAbortResponse)
+	err := c.cc.Invoke(ctx, "/db.JKZDB/SetEntryAbort", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *jKZDBClient) GetEntryById(ctx context.Context, in *GetEntryByIdRequest, opts ...grpc.CallOption) (*GetEntryByIdResponse, error) {
 	out := new(GetEntryByIdResponse)
 	err := c.cc.Invoke(ctx, "/db.JKZDB/GetEntryById", in, out, opts...)
@@ -63,8 +73,8 @@ func (c *jKZDBClient) GetEntryById(ctx context.Context, in *GetEntryByIdRequest,
 	return out, nil
 }
 
-func (c *jKZDBClient) GetEntryByField(ctx context.Context, in *GetEntryByFieldRequest, opts ...grpc.CallOption) (*GetEntryByFieldResponse, error) {
-	out := new(GetEntryByFieldResponse)
+func (c *jKZDBClient) GetEntryByField(ctx context.Context, in *GetEntryByIndexedFieldRequest, opts ...grpc.CallOption) (*GetEntryByIndexedFieldResponse, error) {
+	out := new(GetEntryByIndexedFieldResponse)
 	err := c.cc.Invoke(ctx, "/db.JKZDB/GetEntryByField", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -78,8 +88,9 @@ func (c *jKZDBClient) GetEntryByField(ctx context.Context, in *GetEntryByFieldRe
 type JKZDBServer interface {
 	SetEntryPrepare(context.Context, *SetEntryPrepareRequest) (*SetEntryPrepareResponse, error)
 	SetEntryCommit(context.Context, *SetEntryCommitRequest) (*SetEntryCommitResponse, error)
+	SetEntryAbort(context.Context, *SetEntryAbortRequest) (*SetEntryAbortResponse, error)
 	GetEntryById(context.Context, *GetEntryByIdRequest) (*GetEntryByIdResponse, error)
-	GetEntryByField(context.Context, *GetEntryByFieldRequest) (*GetEntryByFieldResponse, error)
+	GetEntryByField(context.Context, *GetEntryByIndexedFieldRequest) (*GetEntryByIndexedFieldResponse, error)
 	mustEmbedUnimplementedJKZDBServer()
 }
 
@@ -93,10 +104,13 @@ func (UnimplementedJKZDBServer) SetEntryPrepare(context.Context, *SetEntryPrepar
 func (UnimplementedJKZDBServer) SetEntryCommit(context.Context, *SetEntryCommitRequest) (*SetEntryCommitResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetEntryCommit not implemented")
 }
+func (UnimplementedJKZDBServer) SetEntryAbort(context.Context, *SetEntryAbortRequest) (*SetEntryAbortResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetEntryAbort not implemented")
+}
 func (UnimplementedJKZDBServer) GetEntryById(context.Context, *GetEntryByIdRequest) (*GetEntryByIdResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetEntryById not implemented")
 }
-func (UnimplementedJKZDBServer) GetEntryByField(context.Context, *GetEntryByFieldRequest) (*GetEntryByFieldResponse, error) {
+func (UnimplementedJKZDBServer) GetEntryByField(context.Context, *GetEntryByIndexedFieldRequest) (*GetEntryByIndexedFieldResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetEntryByField not implemented")
 }
 func (UnimplementedJKZDBServer) mustEmbedUnimplementedJKZDBServer() {}
@@ -148,6 +162,24 @@ func _JKZDB_SetEntryCommit_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _JKZDB_SetEntryAbort_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetEntryAbortRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JKZDBServer).SetEntryAbort(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/db.JKZDB/SetEntryAbort",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JKZDBServer).SetEntryAbort(ctx, req.(*SetEntryAbortRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _JKZDB_GetEntryById_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetEntryByIdRequest)
 	if err := dec(in); err != nil {
@@ -167,7 +199,7 @@ func _JKZDB_GetEntryById_Handler(srv interface{}, ctx context.Context, dec func(
 }
 
 func _JKZDB_GetEntryByField_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetEntryByFieldRequest)
+	in := new(GetEntryByIndexedFieldRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -179,7 +211,7 @@ func _JKZDB_GetEntryByField_Handler(srv interface{}, ctx context.Context, dec fu
 		FullMethod: "/db.JKZDB/GetEntryByField",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(JKZDBServer).GetEntryByField(ctx, req.(*GetEntryByFieldRequest))
+		return srv.(JKZDBServer).GetEntryByField(ctx, req.(*GetEntryByIndexedFieldRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -200,6 +232,10 @@ var JKZDB_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _JKZDB_SetEntryCommit_Handler,
 		},
 		{
+			MethodName: "SetEntryAbort",
+			Handler:    _JKZDB_SetEntryAbort_Handler,
+		},
+		{
 			MethodName: "GetEntryById",
 			Handler:    _JKZDB_GetEntryById_Handler,
 		},
@@ -209,5 +245,5 @@ var JKZDB_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "proto/db.proto",
+	Metadata: "db/proto/db.proto",
 }

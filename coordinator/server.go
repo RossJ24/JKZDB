@@ -23,5 +23,4 @@ func main() {
 	api.Get("", coordinator.GetHandler)
 	api.Put("", coordinator.PutHandler)
 	api.Delete("", coordinator.DeleteHandler)
-
 }

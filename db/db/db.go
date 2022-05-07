@@ -2,6 +2,7 @@ package db
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 
 	"github.com/boltdb/bolt"
@@ -13,8 +14,9 @@ type JKZDB struct {
 	db *bolt.DB
 }
 
-func CreateJKZDB() (*JKZDB, error) {
-	db, err := bolt.Open("jkzdb.db", fs.ModeAppend, nil)
+func CreateJKZDB(identifier int) (*JKZDB, error) {
+	dbname := fmt.Sprintf("jkzdb-%d.db", identifier)
+	db, err := bolt.Open(dbname, fs.ModeAppend, nil)
 	if err != nil {
 		return nil, err
 	}

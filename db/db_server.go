@@ -14,9 +14,9 @@ import (
 var port = flag.Int("port", 8080, "The server port")
 
 func main() {
-
+	flag.Parse()
 	s := grpc.NewServer()
-	server, err := sl.MakeJKZDBServer()
+	server, err := sl.MakeJKZDBServer(*port)
 	if err != nil {
 		log.Fatalf("Could not start DB server.")
 	}
