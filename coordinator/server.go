@@ -17,10 +17,14 @@ func main() {
 	if err != nil {
 		log.Fatal("Could not start server.\n")
 	}
+	transaction := app.Group("/transaction", func(ctx *fiber.Ctx) error {
+		return ctx.Next()
+	})
 	api := app.Group("/api", func(ctx *fiber.Ctx) error {
 		return ctx.Next()
 	})
 	api.Get("", coordinator.GetHandler)
 	api.Put("", coordinator.PutHandler)
 	api.Delete("", coordinator.DeleteHandler)
+	transaction.Post("", coordinator.TransactionHandler)
 }
