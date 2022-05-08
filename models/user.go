@@ -1,5 +1,7 @@
 package models
 
+import "fmt"
+
 type User struct {
 	Email           string `json:"email"`
 	Balance         int64  `json:"balance"`
@@ -11,8 +13,9 @@ type User struct {
 func (user *User) ToMap() map[string]string {
 	rep := make(map[string]string)
 	rep["email"] = user.Email
-	rep["balance"] = string(user.Balance)
+	rep["balance"] = fmt.Sprint(user.Balance)
 	rep["age"] = string(user.Age)
-	rep["account_opened_at"] = string(user.AccountOpenedAt)
-	rep["last_used"] = string(user.LastUsed)
+	rep["account_opened_at"] = fmt.Sprint(user.AccountOpenedAt)
+	rep["last_used"] = fmt.Sprint(user.LastUsed)
+	return rep
 }

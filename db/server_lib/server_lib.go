@@ -30,8 +30,20 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, in *pb.SetEntryCo
 	return nil, nil
 }
 func (server *JKZDBServer) GetEntry(ctx context.Context, in *pb.GetEntryRequest) (*pb.GetEntryResponse, error) {
-	return nil, nil
+	server.mx.RLock()
+	defer server.mx.RUnlock()
+	value, err := server.jkzdb.GetValue(in.Query)
+	if err != nil {
+		return nil, err
+	}
+	entry := make(map[string]string)
+	entry[in.Query] = value
+	resp := &pb.GetEntryResponse{
+		Entry: entry,
+	}
+	return resp, nil
 }
+
 func (server *JKZDBServer) GetEntryByIndexedField(ctx context.Context, in *pb.GetEntryByIndexedFieldRequest) (*pb.GetEntryByIndexedFieldResponse, error) {
 	return nil, nil
 }

@@ -27,15 +27,18 @@ func NewCoordinator(shardConfigPath string) (*Coordinator, error) {
 	}
 	var config map[string][]map[string]string
 	json.Unmarshal(configFile, &config)
-	// TODO: actually fill in clients
 	connections := make([]*grpc.ClientConn, 0)
 	for _, sh := range config["shards"] {
-		grpc.Dial(LOCALHOST+sh["port"], grpc.DialOption(grpc.WithTransportCredentials(insecure.NewCredentials())))
+		conn, err := grpc.Dial(LOCALHOST+sh["port"], grpc.DialOption(grpc.WithTransportCredentials(insecure.NewCredentials())))
+		if err != nil {
+			return nil, err
+		}
+		connections = append(connections, conn)
 	}
 	indexedFields := make(map[string]struct{})
 	return &Coordinator{
 		connections,
 		indexedFields,
-		1,
+		0,
 	}, nil
 }

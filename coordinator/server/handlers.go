@@ -54,6 +54,7 @@ func (coordinator *Coordinator) ApiPutHandler(ctx *fiber.Ctx) error {
 	index := ctx.Query("index", "id")
 	key := ctx.Query("key")
 	query := concatindexkey(index, key)
+
 	return nil
 }
 
@@ -84,6 +85,11 @@ func (coordinator *Coordinator) CreateUserHandler(ctx *fiber.Ctx) error {
 	if err := ctx.BodyParser(user); err != nil {
 		return err
 	}
+
+	// How are we gonna map indexed fields to the same node
+
+	//
+
 	// TODO: check indexed fields first to make sure that they are unique
 	userId := atomic.AddInt64(&coordinator.nextId, 1)
 	return nil

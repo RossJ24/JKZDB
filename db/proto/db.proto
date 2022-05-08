@@ -4,7 +4,9 @@ package db;
 
 option go_package = "JKZDB/db/proto";
 
-
+message UpdateMap {
+    map<string, string> updates = 1;
+}
 message SetEntryPrepareRequest {
     int64 idempotencyKey = 1;
     string key = 2;
@@ -26,6 +28,28 @@ message SetEntryAbortRequest {
 }
 
 message SetEntryAbortResponse {}
+
+message SetEntryPrepareRequestBatch {
+    int64 idempotencyKey = 1;
+    repeated string keys = 2;
+    map<string, UpdateMap> entriesToUpdate = 3;
+}
+
+message SetEntryPrepareResponseBatch {}
+
+message SetEntryCommitRequestBatch {
+    int64 idempotencyKey = 1;
+    string key = 2;
+    map<string, UpdateMap> entriesToUpdate = 3;
+}
+
+message SetEntryCommitResponseBatch {}
+
+message SetEntryAbortRequestBatch {
+    int64 idempotencyKey = 1;
+}
+
+message SetEntryAbortResponseBatch {}
 
 message GetEntryRequest{
     string query = 1;
