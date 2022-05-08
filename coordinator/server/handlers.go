@@ -1,42 +1,90 @@
 package server_lib
 
 import (
+	pb "JKZDB/db/proto"
+	"JKZDB/models"
+	"context"
+	"errors"
 	"fmt"
+	"sync/atomic"
 
 	fiber "github.com/gofiber/fiber/v2"
 )
 
 func concatindexkey(index string, key string) string {
-	fmt.Sprintf("%s:%s", index, key)
+	return fmt.Sprintf("%s:%s", index, key)
 }
 
-func (coordinator *Coordinator) GetHandler(ctx *fiber.Ctx) error {
+// Handles Get Requests to the
+func (coordinator *Coordinator) ApiGetHandler(ctx *fiber.Ctx) error {
+	index := ctx.Query("index", "id")
+	if !coordinator.IsIndexedField(index) {
+		return errors.New("")
+	}
+	key := ctx.Query("key")
+	field := ctx.Query("field")
+	query := concatindexkey(index, key)
+	if index != "id" {
+		conn := coordinator.ShardForKey(query)
+		client := pb.NewJKZDBClient(conn)
+		req := &pb.GetEntryRequest{
+			Query: query,
+			Field: nil,
+		}
+		res, err := client.GetEntry(context.Background(), req)
+		if err != nil {
+			return err
+		}
+		query = concatindexkey("id", res.GetEntry()["id"])
+	}
+	conn := coordinator.ShardForKey(query)
+	client := pb.NewJKZDBClient(conn)
+	req := &pb.GetEntryRequest{
+		Query: query,
+		Field: &field,
+	}
+	res, err := client.GetEntry(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	return ctx.Status(200).JSON(res.GetEntry())
+}
+
+func (coordinator *Coordinator) ApiPutHandler(ctx *fiber.Ctx) error {
 	index := ctx.Query("index", "id")
 	key := ctx.Query("key")
 	query := concatindexkey(index, key)
 	return nil
 }
 
-func (coordinator *Coordinator) PutHandler(ctx *fiber.Ctx) error {
+func (coordinator *Coordinator) ApiDeleteHandler(ctx *fiber.Ctx) error {
 	index := ctx.Query("index", "id")
 	key := ctx.Query("key")
 	query := concatindexkey(index, key)
 	return nil
 }
 
-func (coordinator *Coordinator) DeleteHandler(ctx *fiber.Ctx) error {
-	index := ctx.Query("index", "id")
-	key := ctx.Query("key")
-	query := concatindexkey(index, key)
-	return nil
-}
-
-func (coordinator *Coordinator) PostHandler(ctx *fiber.Ctx) error {
-	newIndex := ctx.Query("new-index")
+func (coordinator *Coordinator) IndexPostHandler(ctx *fiber.Ctx) error {
+	newIndex := ctx.Query("new-index", "")
+	if len(newIndex) == 0 {
+		return errors.New("No new index name supplied")
+	}
 	coordinator.IndexedFields[newIndex] = struct{}{}
 	return nil
 }
 
-func (Coordinator *Coordinator) TransactionHandler(ctx *fiber.Ctx) error {
+func (coordinator *Coordinator) TransactionPostHandler(ctx *fiber.Ctx) error {
+	to := ctx.Query("to")
+	from := ctx.Query("from")
+	return nil
+}
 
+func (coordinator *Coordinator) CreateUserHandler(ctx *fiber.Ctx) error {
+	user := &models.User{}
+	if err := ctx.BodyParser(user); err != nil {
+		return err
+	}
+	// TODO: check indexed fields first to make sure that they are unique
+	userId := atomic.AddInt64(&coordinator.nextId, 1)
+	return nil
 }

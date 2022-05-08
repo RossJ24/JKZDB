@@ -19,9 +19,9 @@ func (coordinator *Coordinator) IsIndexedField(field string) bool {
 	return exists
 }
 
-// Returns the client connection of the shard of the field
-func (Coordinator *Coordinator) ShardForField(field string) *grpc.ClientConn {
-	// TODO: Just returns the client connection for the matching shard
+// Returns the client connection of the shard of the key
+func (coordinator *Coordinator) ShardForKey(key string) *grpc.ClientConn {
+	return coordinator.ShardMapping[KeyHashFunc(key)]
 }
 
 // Sends Prepare RPC to given shard

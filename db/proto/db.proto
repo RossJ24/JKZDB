@@ -27,12 +27,13 @@ message SetEntryAbortRequest {
 
 message SetEntryAbortResponse {}
 
-message GetEntryByIdRequest{
-    string id = 1;
+message GetEntryRequest{
+    string query = 1;
+    optional string field = 2;
 }
 
-message GetEntryByIdResponse{
-    string entry = 1;
+message GetEntryResponse{
+    map<string, string> entry = 3;
 }
 
 // For retrieving the id of a row using an indexed field.
@@ -52,7 +53,7 @@ service JKZDB {
 
     rpc SetEntryAbort(SetEntryAbortRequest) returns(SetEntryAbortResponse);
 
-    rpc GetEntryById(GetEntryByIdRequest) returns(GetEntryByIdResponse);
+    rpc GetEntry(GetEntryRequest) returns(GetEntryResponse);
 
     rpc GetEntryByIndexedField(GetEntryByIndexedFieldRequest) returns(GetEntryByIndexedFieldResponse);
 }

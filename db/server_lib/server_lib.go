@@ -29,7 +29,7 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, in *pb.SetEntryP
 func (server *JKZDBServer) SetEntryCommit(ctx context.Context, in *pb.SetEntryCommitRequest) (*pb.SetEntryCommitResponse, error) {
 	return nil, nil
 }
-func (server *JKZDBServer) GetEntryById(ctx context.Context, in *pb.GetEntryByIdRequest) (*pb.GetEntryByIdResponse, error) {
+func (server *JKZDBServer) GetEntry(ctx context.Context, in *pb.GetEntryRequest) (*pb.GetEntryResponse, error) {
 	return nil, nil
 }
 func (server *JKZDBServer) GetEntryByIndexedField(ctx context.Context, in *pb.GetEntryByIndexedFieldRequest) (*pb.GetEntryByIndexedFieldResponse, error) {
