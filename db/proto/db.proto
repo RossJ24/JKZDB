@@ -6,11 +6,14 @@ option go_package = "JKZDB/db/proto";
 
 message UpdateMap {
     map<string, string> updates = 1;
+    bool unique = 2;
 }
+
 message SetEntryPrepareRequest {
     int64 idempotencyKey = 1;
     string key = 2;
     map<string, string> updates = 3;
+    bool unique = 4;
 }
 
 message SetEntryPrepareResponse {}
@@ -19,37 +22,39 @@ message SetEntryCommitRequest {
     int64 idempotencyKey = 1;
     string key = 2;
     map<string, string> updates = 3;
+    bool unique = 4;
 }
 
 message SetEntryCommitResponse {}
 
 message SetEntryAbortRequest {
     int64 idempotencyKey = 1;
+    bool unique = 2;
 }
 
 message SetEntryAbortResponse {}
 
-message SetEntryPrepareRequestBatch {
+message SetEntryPrepareBatchRequest {
     int64 idempotencyKey = 1;
     repeated string keys = 2;
-    map<string, UpdateMap> entriesToUpdate = 3;
+    repeated UpdateMap updates = 3;
 }
 
-message SetEntryPrepareResponseBatch {}
+message SetEntryPrepareBatchResponse {}
 
-message SetEntryCommitRequestBatch {
+message SetEntryCommitBatchRequest {
     int64 idempotencyKey = 1;
-    string key = 2;
-    map<string, UpdateMap> entriesToUpdate = 3;
+    repeated string keys = 2;
+    repeated UpdateMap updates = 3;
 }
 
-message SetEntryCommitResponseBatch {}
+message SetEntryCommitBatchResponse {}
 
-message SetEntryAbortRequestBatch {
+message SetEntryAbortBatchRequest {
     int64 idempotencyKey = 1;
 }
 
-message SetEntryAbortResponseBatch {}
+message SetEntryAbortBatchResponse {}
 
 message GetEntryRequest{
     string query = 1;
@@ -60,24 +65,18 @@ message GetEntryResponse{
     map<string, string> entry = 3;
 }
 
-// For retrieving the id of a row using an indexed field.
-message GetEntryByIndexedFieldRequest{
-    string field = 1;
-    string key = 2;
-}
-
-message GetEntryByIndexedFieldResponse{
-    string entry = 1;
-}
-
 service JKZDB {
     rpc SetEntryPrepare(SetEntryPrepareRequest) returns(SetEntryPrepareResponse);
 
+    rpc SetEntryPrepareBatch(SetEntryPrepareBatchRequest) returns(SetEntryPrepareBatchResponse);
+
     rpc SetEntryCommit(SetEntryCommitRequest) returns(SetEntryCommitResponse);
 
+    rpc SetEntryCommitBatch(SetEntryCommitBatchRequest) returns(SetEntryCommitBatchResponse);
+
     rpc SetEntryAbort(SetEntryAbortRequest) returns(SetEntryAbortResponse);
-
+    
+    rpc SetEntryAbortBatch(SetEntryAbortBatchRequest) returns(SetEntryAbortBatchResponse);
+    
     rpc GetEntry(GetEntryRequest) returns(GetEntryResponse);
-
-    rpc GetEntryByIndexedField(GetEntryByIndexedFieldRequest) returns(GetEntryByIndexedFieldResponse);
 }

@@ -14,8 +14,7 @@ var LOCALHOST string = "[::1]:"
 type Coordinator struct {
 	// ShardMap (Lowkey should be a tree for range-sharding)
 	// Doing hash sharding for now
-	ShardMapping  []*grpc.ClientConn
-	IndexedFields map[string]struct{}
+	ShardMapping []*grpc.ClientConn
 	// Monotonically increasing, and ONLY atomically updated
 	nextId int64
 }
@@ -35,10 +34,8 @@ func NewCoordinator(shardConfigPath string) (*Coordinator, error) {
 		}
 		connections = append(connections, conn)
 	}
-	indexedFields := make(map[string]struct{})
 	return &Coordinator{
 		connections,
-		indexedFields,
 		0,
 	}, nil
 }

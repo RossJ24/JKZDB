@@ -4,9 +4,9 @@ import (
 	pb "JKZDB/db/proto"
 	"JKZDB/models"
 	"context"
-	"errors"
 	"fmt"
 	"sync/atomic"
+	"time"
 
 	fiber "github.com/gofiber/fiber/v2"
 )
@@ -18,9 +18,6 @@ func concatindexkey(index string, key string) string {
 // Handles Get Requests to the
 func (coordinator *Coordinator) ApiGetHandler(ctx *fiber.Ctx) error {
 	index := ctx.Query("index", "id")
-	if !coordinator.IsIndexedField(index) {
-		return errors.New("")
-	}
 	key := ctx.Query("key")
 	field := ctx.Query("field")
 	query := concatindexkey(index, key)
@@ -47,14 +44,14 @@ func (coordinator *Coordinator) ApiGetHandler(ctx *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return ctx.Status(200).JSON(res.GetEntry())
+	return ctx.Status(fiber.StatusOK).JSON(res.GetEntry())
 }
 
 func (coordinator *Coordinator) ApiPutHandler(ctx *fiber.Ctx) error {
 	index := ctx.Query("index", "id")
 	key := ctx.Query("key")
 	query := concatindexkey(index, key)
-
+	// TODO: Implement Updates
 	return nil
 }
 
@@ -62,21 +59,17 @@ func (coordinator *Coordinator) ApiDeleteHandler(ctx *fiber.Ctx) error {
 	index := ctx.Query("index", "id")
 	key := ctx.Query("key")
 	query := concatindexkey(index, key)
-	return nil
-}
-
-func (coordinator *Coordinator) IndexPostHandler(ctx *fiber.Ctx) error {
-	newIndex := ctx.Query("new-index", "")
-	if len(newIndex) == 0 {
-		return errors.New("No new index name supplied")
-	}
-	coordinator.IndexedFields[newIndex] = struct{}{}
+	// TODO: Implement Deletes
 	return nil
 }
 
 func (coordinator *Coordinator) TransactionPostHandler(ctx *fiber.Ctx) error {
+	// Id of the recipient of the transaction
 	to := ctx.Query("to")
+	// Id of the sender of the transaction
 	from := ctx.Query("from")
+	amount := ctx.Query("amount")
+	// TODO: Implement Transactions
 	return nil
 }
 
@@ -85,12 +78,37 @@ func (coordinator *Coordinator) CreateUserHandler(ctx *fiber.Ctx) error {
 	if err := ctx.BodyParser(user); err != nil {
 		return err
 	}
-
-	// How are we gonna map indexed fields to the same node
-
-	//
-
-	// TODO: check indexed fields first to make sure that they are unique
 	userId := atomic.AddInt64(&coordinator.nextId, 1)
-	return nil
+	userMap := user.ToMap()
+	emailKey := concatindexkey("email", userMap["email"])
+	primaryKey := concatindexkey("id", fmt.Sprint(userId))
+	emailShard := coordinator.ShardForKey(emailKey)
+	primaryShard := coordinator.ShardForKey(primaryKey)
+	idempotencyKey := time.Now().Unix()
+	emailChanges := map[string]string{"key": fmt.Sprint(userId)}
+	if emailShard == primaryShard {
+		keys := []string{emailKey, primaryKey}
+		changes := []map[string]string{emailChanges, userMap}
+		unique := []bool{true, true}
+		if coordinator.SendPrepareBatchRPC(primaryShard, keys, changes, idempotencyKey, unique) {
+			coordinator.SendCommitBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
+		} else {
+			coordinator.SendAbortBatchRPC(primaryShard, idempotencyKey)
+		}
+	} else {
+		emailRes := coordinator.SendPrepareRPC(emailShard, emailKey, emailChanges, idempotencyKey, true)
+		primaryRes := coordinator.SendPrepareRPC(primaryShard, primaryKey, userMap, idempotencyKey, true)
+		if emailRes && primaryRes {
+			coordinator.SendCommitRPC(emailShard, emailKey, emailChanges, idempotencyKey, true)
+			coordinator.SendCommitRPC(primaryShard, primaryKey, userMap, idempotencyKey, true)
+		} else if emailRes && !primaryRes {
+			coordinator.SendAbortRPC(emailShard, idempotencyKey)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
+		} else {
+			coordinator.SendAbortRPC(primaryShard, idempotencyKey)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
+		}
+	}
+
+	return ctx.SendStatus(fiber.StatusCreated)
 }

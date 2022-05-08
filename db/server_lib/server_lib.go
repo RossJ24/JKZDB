@@ -43,7 +43,3 @@ func (server *JKZDBServer) GetEntry(ctx context.Context, in *pb.GetEntryRequest)
 	}
 	return resp, nil
 }
-
-func (server *JKZDBServer) GetEntryByIndexedField(ctx context.Context, in *pb.GetEntryByIndexedFieldRequest) (*pb.GetEntryByIndexedFieldResponse, error) {
-	return nil, nil
-}
