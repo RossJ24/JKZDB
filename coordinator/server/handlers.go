@@ -48,8 +48,9 @@ func (coordinator *Coordinator) ApiGetHandler(ctx *fiber.Ctx) error {
 }
 
 func (coordinator *Coordinator) ApiPutHandler(ctx *fiber.Ctx) error {
-	index := ctx.Query("index", "id")
-	key := ctx.Query("key")
+	id := ctx.Query("id")
+	oldEmail := ctx.Query("old-email")
+	newEmail := ctx.Query("new-email")
 	query := concatindexkey(index, key)
 	// TODO: Implement Updates
 	return nil

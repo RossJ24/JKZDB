@@ -6,7 +6,7 @@ type User struct {
 	Email           string `json:"email"`
 	Balance         int64  `json:"balance"`
 	Age             int32  `json:"age"`
-	AccountOpenedAt int64  `json:"account_opened_At"`
+	AccountOpenedAt int64  `json:"account_opened_at"`
 	LastUsed        int64  `json:"last_used"`
 }
 

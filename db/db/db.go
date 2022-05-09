@@ -78,25 +78,6 @@ func (jkzdb *JKZDB) DeleteKey(key string) error {
 	return err
 }
 
-func (jkzdb *JKZDB) isUnique(key string) (bool, error) {
-
-	// check if string is not in db yet
-	// can try to call get value
-	// TODO: SCAN DB FOR UNIQUE KEYS
-	err := jkzdb.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket(DEFAULT_BUCKET)
-		if b == nil {
-			return errors.New("Bucket doesn't exist.")
-		}
-		valueBytes := b.Get([]byte(key))
-		if valueBytes == nil {
-			return true, nil
-		}
-		return nil
-	})
-	return false, nil
-}
-
 func (jkzdb *JKZDB) UpdateEntry(key, value string) error {
 	// TODO: This is for new creation, but we need another function for more fine grained
 	// updates with pre-existing keys
