@@ -217,15 +217,176 @@ func (server *JKZDBServer) GetEntry(ctx context.Context, req *pb.GetEntryRequest
 
 func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.SetEntryPrepareBatchRequest) (*pb.SetEntryPrepareBatchResponse, error) {
 	// TODO: Implement, can lowkey just copy logic from above and loop, or abstract that^ logic and call a helper function and loop
-	return nil, nil
+	// Matthew: Ross, I basically copied the code above and re-used it in a loop, you should check it
+
+	keys := req.GetKeys()
+	updateMap := req.GetUpdates()
+	server.mx.Lock()
+
+	for i := 0; i < len(keys); i++ {
+		val, err := server.jkzdb.GetValue(keys[i])
+		if err != nil {
+			return nil, err
+		}
+
+		unique := updateMap[i].GetUnique()
+		updates := updateMap[i].GetUpdates()
+
+		// If the value is supposed to be unique, but it already exists on this shard, then it's a bad request.
+		if len(val) != 0 && unique {
+			server.mx.Unlock()
+			return nil, status.Errorf(
+				codes.AlreadyExists,
+				"Batched: Key already exists",
+			)
+		}
+		// add another option for del
+		if _, exists := updates["key"]; exists {
+			// In this case it is just a key like email:mail@mail.com => 1 being added
+		} else if _, exists := updates["transaction"]; exists {
+			// In this case it is just the balance being updated
+			user := &models.User{}
+			err := json.Unmarshal([]byte(val), &user)
+			if err != nil {
+				return nil, err
+			}
+			delta, err := strconv.ParseInt(updates["transaction"], 10, 64)
+			if err != nil {
+
+				server.mx.Unlock()
+				return nil, err
+			}
+			if user.Balance-delta < 0 {
+
+				server.mx.Unlock()
+				return nil, err
+			}
+		} else if _, exists := updates["email"]; exists && len(req.Updates) == 1 {
+			// In this case the user email is being updated
+			user := &models.User{}
+			err := json.Unmarshal([]byte(val), &user)
+			if err != nil {
+
+				server.mx.Unlock()
+				return nil, err
+			}
+			if user.Email == updates["email"] {
+
+				server.mx.Unlock()
+				return nil, status.Error(
+					codes.AlreadyExists,
+					"No change to email necessary",
+				)
+			}
+		} else if _, exists := updates["del"]; exists {
+			// In this case a key is being deleted
+			if len(val) == 0 {
+				server.mx.Unlock()
+				return nil, status.Errorf(
+					codes.NotFound,
+					"Key (%s) not found",
+					keys[i],
+				)
+			}
+		} else if unique && len(req.Updates) == 5 {
+			// In this case a user is being created, nothing else to check here. We already know the new key doesn't exist
+		}
+
+		atomic.StoreInt64(&server.currentUpdate, req.IdempotencyKey)
+	}
+
+	return &pb.SetEntryPrepareBatchResponse{}, nil
 }
 
 func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetEntryCommitBatchRequest) (*pb.SetEntryCommitBatchResponse, error) {
 	// TODO: Implement, can lowkey just copy logic from above and loop, or abstract that^ logic and call a helper function and loop
-	return nil, nil
+	keys := req.GetKeys()
+	updateMap := req.GetUpdates()
+
+	for i := 0; i < len(keys); i++ {
+		updates := updateMap[i].GetUpdates()
+
+		prepareIdempotencyKey := atomic.LoadInt64(&server.currentUpdate)
+		if prepareIdempotencyKey != req.IdempotencyKey {
+			return nil, status.Errorf(
+				codes.FailedPrecondition,
+				"Required Idempotency Key: %d does not match the one provided: %d",
+				prepareIdempotencyKey,
+				req.IdempotencyKey,
+			)
+		}
+		prepareEmailDel := server.emailDel.Load().(*string)
+		if prepareEmailDel != nil {
+			server.jkzdb.DeleteKey(*prepareEmailDel)
+		}
+	
+		if _, exists := updates["key"]; exists {
+			server.jkzdb.UpdateEntry(keys[i], updates["key"])
+		} else if _, exists := updates["transaction"]; exists {
+			// In this case it is just the balance being updated
+			user := &models.User{}
+			val, err := server.jkzdb.GetValue(keys[i])
+			if err != nil {
+				return nil, err
+			}
+			err = json.Unmarshal([]byte(val), &user)
+			if err != nil {
+				return nil, err
+			}
+			delta, err := strconv.ParseInt(updates["transaction"], 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			user.Balance -= delta
+			newVal, err := json.Marshal(user)
+			if err != nil {
+				return nil, err
+			}
+			server.jkzdb.UpdateEntry(keys[i], string(newVal))
+		} else if _, exists := updates["email"]; exists && len(req.Updates) == 1 {
+			// In this case the user email is being updated
+			user := &models.User{}
+			val, err := server.jkzdb.GetValue(keys[i])
+			if err != nil {
+				return nil, err
+			}
+			err = json.Unmarshal([]byte(val), &user)
+			if err != nil {
+				return nil, err
+			}
+			user.Email = updates["email"]
+			newVal, err := json.Marshal(user)
+			if err != nil {
+				return nil, err
+			}
+			server.jkzdb.UpdateEntry(keys[i], string(newVal))
+		} else if _, exists := updates["del"]; exists {
+			// In this case a key is being deleted, nothing to check here
+			server.jkzdb.DeleteKey(keys[i])
+		}
+	}
+
+	server.mx.Unlock()
+
+	return &pb.SetEntryCommitBatchResponse{}, nil
 }
 
 func (server *JKZDBServer) SetEntryAbortBatch(ctx context.Context, req *pb.SetEntryAbortBatchRequest) (*pb.SetEntryAbortBatchResponse, error) {
 	// TODO: Implement, can lowkey just copy logic from above and loop, or abstract that^ logic and call a helper function and loop
-	return nil, nil
+
+	// Matthew: Ross, I don't think we need a loop here? We just unlock the shard even if it's batched.
+	prepareIdempotencyKey := atomic.LoadInt64(&server.currentUpdate)
+	if prepareIdempotencyKey != req.IdempotencyKey {
+		return nil, status.Errorf(
+			codes.FailedPrecondition,
+			"Required Idempotency Key: %d does not match the one provided: %d",
+			prepareIdempotencyKey,
+			req.IdempotencyKey,
+		)
+	}
+	server.emailDel.Store(nil)
+	atomic.StoreInt64(&server.currentUpdate, 0)
+	server.mx.Unlock()
+
+	return &pb.SetEntryAbortBatchResponse{}, nil
 }
