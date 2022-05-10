@@ -60,7 +60,7 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 		if err != nil {
 			return nil, err
 		}
-		delta, err := strconv.ParseInt(req.Updates["withdrawal"], 10, 64)
+		delta, err := strconv.ParseInt(req.Updates["transaction"], 10, 64)
 		if err != nil {
 
 			server.mx.Unlock()
@@ -111,7 +111,7 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 		if err != nil {
 			return nil, err
 		}
-		delta, err := strconv.ParseInt(req.Updates["transaction"], 10, 64)
+		delta, err := strconv.ParseInt(req.Updates["withdrawal"], 10, 64)
 		if err != nil {
 
 			server.mx.Unlock()
@@ -392,6 +392,30 @@ func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.Set
 			}
 		} else if unique && len(req.Updates) == 5 {
 			// In this case a user is being created, nothing else to check here. We already know the new key doesn't exist
+		} else if _, exists := updates["withdrawal"]; exists {
+			user := &models.User{}
+			err := json.Unmarshal([]byte(val), &user)
+			if err != nil {
+				return nil, err
+			}
+			delta, err := strconv.ParseInt(updates["withdrawal"], 10, 64)
+			if err != nil {
+
+				server.mx.Unlock()
+				return nil, err
+			}
+			if user.Balance+delta < 0 {
+
+				server.mx.Unlock()
+				return nil, status.Errorf(
+					codes.FailedPrecondition,
+					"This withdrawal would overdraw account %s.",
+					req.Keys[i],
+				)
+			}
+
+		} else if _, exists := updates["deposit"]; exists {
+			// Nothing to check here
 		}
 
 		atomic.StoreInt64(&server.currentUpdate, req.IdempotencyKey)
@@ -480,6 +504,49 @@ func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetE
 				return nil, err
 			}
 			server.jkzdb.UpdateEntry(req.Keys[i], string(newVal))
+		} else if _, exists := updates["withdrawal"]; exists {
+			user := &models.User{}
+			val, err := server.jkzdb.GetValue(req.Keys[i])
+			if err != nil {
+				return nil, err
+			}
+			err = json.Unmarshal([]byte(val), &user)
+			if err != nil {
+				return nil, err
+			}
+			delta, err := strconv.ParseInt(updates["withdrawal"], 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			user.Balance += delta
+			user.LastUsed = time.Now().Unix()
+			newVal, err := json.Marshal(user)
+			if err != nil {
+				return nil, err
+			}
+			server.jkzdb.UpdateEntry(req.Keys[i], string(newVal))
+
+		} else if _, exists := updates["deposit"]; exists {
+			user := &models.User{}
+			val, err := server.jkzdb.GetValue(req.Keys[i])
+			if err != nil {
+				return nil, err
+			}
+			err = json.Unmarshal([]byte(val), &user)
+			if err != nil {
+				return nil, err
+			}
+			delta, err := strconv.ParseInt(updates["deposit"], 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			user.Balance += delta
+			user.LastUsed = time.Now().Unix()
+			newVal, err := json.Marshal(user)
+			if err != nil {
+				return nil, err
+			}
+			server.jkzdb.UpdateEntry(req.Keys[i], string(newVal))
 		}
 	}
 
@@ -489,9 +556,6 @@ func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetE
 }
 
 func (server *JKZDBServer) SetEntryAbortBatch(ctx context.Context, req *pb.SetEntryAbortBatchRequest) (*pb.SetEntryAbortBatchResponse, error) {
-	// TODO: Implement, can lowkey just copy logic from above and loop, or abstract that^ logic and call a helper function and loop
-
-	// Matthew: Ross, I don't think we need a loop here? We just unlock the shard even if it's batched.
 	prepareIdempotencyKey := atomic.LoadInt64(&server.currentUpdate)
 	if prepareIdempotencyKey != req.IdempotencyKey {
 		return nil, status.Errorf(
