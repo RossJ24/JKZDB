@@ -57,6 +57,93 @@ func (coordinator *Coordinator) ApiPutHandler(ctx *fiber.Ctx) error {
 	newEmailQuery := CreateQuery("email", newEmail)
 	idQuery := CreateQuery("id", id)
 	// TODO: Write Logic for updating an email. This can be a 3, 2 or 1 shard update.
+	primaryShard := coordinator.ShardForKey(idQuery)
+	oldEmailShard := coordinator.ShardForKey(oldEmailQuery)
+	newEmailShard := coordinator.ShardForKey(newEmailQuery)
+
+	oldEmailMap := map[string]string{"del": ""}
+	newEmailMap := map[string]string{"email": newEmail}
+	emailChanges := map[string]string{"key": id}
+
+	idempotencyKey := time.Now().Unix()
+
+	// 1 shard update 
+	if primaryShard == oldEmailShard && oldEmailShard == newEmailShard {
+		keys := []string{idQuery, oldEmailQuery, newEmailQuery}
+		changes := []map[string]string{emailChanges, oldEmailMap, newEmailMap}
+		// Matthew: Ross, please check if all should be unique
+		unique := []bool{true, true, true}
+		if coordinator.SendPrepareBatchRPC(primaryShard, keys, changes, idempotencyKey, unique) {
+			coordinator.SendCommitBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
+		} else {
+			coordinator.SendAbortBatchRPC(primaryShard, idempotencyKey)
+		}
+	} else if primaryShard == oldEmailShard {
+		// 2 shard update: primary and oldEmail
+		keys := []string{idQuery, oldEmailQuery}
+		changes := []map[string]string{emailChanges, oldEmailMap}
+		unique := []bool{true, true}
+		batchRes := coordinator.SendPrepareBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
+		newEmailRes := coordinator.SendPrepareRPC(newEmailShard, newEmailQuery, newEmailMap, idempotencyKey, true)
+		
+		if batchRes && newEmailRes {
+			coordinator.SendCommitBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
+			coordinator.SendCommitRPC(newEmailShard, newEmailQuery, newEmailMap, idempotencyKey, true)
+		} else {
+			coordinator.SendAbortBatchRPC(primaryShard, idempotencyKey)
+			coordinator.SendAbortRPC(newEmailShard, idempotencyKey)
+		}
+	} else if primaryShard == newEmailShard {
+		// 2 shard update: primary and newEmail
+		// Matthew: Ross, check for typos in function calls, copying/pasting for this code (maybe make into function later?)
+		keys := []string{idQuery, newEmailQuery}
+		changes := []map[string]string{emailChanges, newEmailMap}
+		unique := []bool{true, true}
+		batchRes := coordinator.SendPrepareBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
+		oldEmailRes := coordinator.SendPrepareRPC(oldEmailShard, oldEmailQuery, oldEmailMap, idempotencyKey, true)
+		
+		if batchRes && oldEmailRes {
+			coordinator.SendCommitBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
+			coordinator.SendCommitRPC(oldEmailShard, oldEmailQuery, oldEmailMap, idempotencyKey, true)
+		} else {
+			coordinator.SendAbortBatchRPC(primaryShard, idempotencyKey)
+			coordinator.SendAbortRPC(oldEmailShard, idempotencyKey)
+		}
+	} else if oldEmailShard == newEmailShard {
+		// 2 shard update: oldEmail and newEmail
+		keys := []string{oldEmailQuery, newEmailQuery}
+		changes := []map[string]string{oldEmailMap, newEmailMap}
+		unique := []bool{true, true}
+		batchRes := coordinator.SendPrepareBatchRPC(oldEmailShard, keys, changes, idempotencyKey, unique)
+		primaryRes := coordinator.SendPrepareRPC(primaryShard, idQuery, emailChanges, idempotencyKey, true)
+		
+		if batchRes && primaryRes {
+			coordinator.SendCommitBatchRPC(oldEmailShard, keys, changes, idempotencyKey, unique)
+			coordinator.SendCommitRPC(primaryShard, idQuery, emailChanges, idempotencyKey, true)
+		} else {
+			coordinator.SendAbortBatchRPC(oldEmailShard, idempotencyKey)
+			coordinator.SendAbortRPC(primaryShard, idempotencyKey)
+		}
+	} else {
+		// 3 shard update
+		primaryRes := coordinator.SendPrepareRPC(primaryShard, idQuery, emailChanges, idempotencyKey, true)
+		oldEmailRes := coordinator.SendPrepareRPC(oldEmailShard, oldEmailQuery, oldEmailMap, idempotencyKey, true)
+		newEmailRes := coordinator.SendPrepareRPC(newEmailShard, newEmailQuery, newEmailMap, idempotencyKey, true)
+
+		if primaryRes && oldEmailRes && newEmailRes {
+			coordinator.SendCommitRPC(primaryShard, idQuery, emailChanges, idempotencyKey, true)
+			coordinator.SendCommitRPC(oldEmailShard, oldEmailQuery, oldEmailMap, idempotencyKey, true)
+			coordinator.SendCommitRPC(newEmailShard, newEmailQuery, newEmailMap, idempotencyKey, true)
+		} else if primaryRes && oldEmailRes {
+			coordinator.SendAbortRPC(newEmailShard, idempotencyKey)
+		} else if primaryRes && newEmailRes {
+			coordinator.SendAbortRPC(oldEmailShard, idempotencyKey)
+
+		} else if oldEmailRes && newEmailRes {
+			coordinator.SendAbortRPC(primaryShard, idempotencyKey)
+		}
+	}
+
 	return nil
 }
 
