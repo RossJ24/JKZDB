@@ -36,14 +36,14 @@ func MakeJKZDBServer(port int) (*JKZDBServer, error) {
 }
 
 func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntryPrepareRequest) (*pb.SetEntryPrepareResponse, error) {
-	// TODO: Might need to check again after the Write lock has been acquired?
-	server.mx.RLock()
+	server.mx.Lock()
 	val, err := server.jkzdb.GetValue(req.GetKey())
 	if err != nil {
 		return nil, err
 	}
 	// If the value is supposed to be unique, but it already exists on this shard, then it's a bad request.
 	if len(val) != 0 && req.Unique {
+		server.mx.Unlock()
 		return nil, status.Errorf(
 			codes.AlreadyExists,
 			"Key already exists",
@@ -61,9 +61,13 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 		}
 		delta, err := strconv.ParseInt(req.Updates["transaction"], 10, 64)
 		if err != nil {
+
+			server.mx.Unlock()
 			return nil, err
 		}
 		if user.Balance-delta < 0 {
+
+			server.mx.Unlock()
 			return nil, err
 		}
 	} else if _, exists := req.Updates["email"]; exists && len(req.Updates) == 1 {
@@ -71,21 +75,31 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 		user := &models.User{}
 		err := json.Unmarshal([]byte(val), &user)
 		if err != nil {
+
+			server.mx.Unlock()
 			return nil, err
 		}
 		if user.Email == req.Updates["email"] {
+
+			server.mx.Unlock()
 			return nil, status.Error(
 				codes.AlreadyExists,
 				"No change to email necessary",
 			)
 		}
 	} else if _, exists := req.Updates["del"]; exists {
-		// In this case a key is being deleted, nothing to check here. The check for existence is already done above.
+		// In this case a key is being deleted
+		if len(val) == 0 {
+			server.mx.Unlock()
+			return nil, status.Errorf(
+				codes.NotFound,
+				"Key (%s) not found",
+				req.Key,
+			)
+		}
 	} else if req.Unique && len(req.Updates) == 5 {
-		// In this case a user is being created,
+		// In this case a user is being created, nothing else to check here. We already know the new key doesn't exist
 	}
-	server.mx.RUnlock()
-	server.mx.Lock()
 	atomic.StoreInt64(&server.currentUpdate, req.IdempotencyKey)
 	return &pb.SetEntryPrepareResponse{}, nil
 }
