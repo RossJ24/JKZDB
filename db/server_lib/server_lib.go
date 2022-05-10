@@ -19,7 +19,6 @@ type JKZDBServer struct {
 	jkzdb         *db.JKZDB
 	mx            sync.RWMutex
 	currentUpdate int64
-	emailDel      atomic.Value
 }
 
 func MakeJKZDBServer(port int) (*JKZDBServer, error) {
@@ -31,7 +30,6 @@ func MakeJKZDBServer(port int) (*JKZDBServer, error) {
 		jkzdb:         jkzdb,
 		currentUpdate: 0,
 	}
-	server.emailDel.Store(nil)
 	return server, nil
 }
 
@@ -114,10 +112,6 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 			req.IdempotencyKey,
 		)
 	}
-	prepareEmailDel := server.emailDel.Load().(*string)
-	if prepareEmailDel != nil {
-		server.jkzdb.DeleteKey(*prepareEmailDel)
-	}
 
 	if _, exists := req.Updates["key"]; exists {
 		server.jkzdb.UpdateEntry(req.GetKey(), req.Updates["key"])
@@ -162,6 +156,9 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 	} else if _, exists := req.Updates["del"]; exists {
 		// In this case a key is being deleted, nothing to check here
 		server.jkzdb.DeleteKey(req.Key)
+	} else if req.Unique && len(req.Updates) == 5 {
+		// In this case a user is being created
+		// TODO: implement go map to json => and then to User model.
 	}
 	server.mx.Unlock()
 	return &pb.SetEntryCommitResponse{}, nil
@@ -178,7 +175,6 @@ func (server *JKZDBServer) SetEntryAbort(ctx context.Context, req *pb.SetEntryAb
 			req.IdempotencyKey,
 		)
 	}
-	server.emailDel.Store(nil)
 	atomic.StoreInt64(&server.currentUpdate, 0)
 	server.mx.Unlock()
 	return &pb.SetEntryAbortResponse{}, nil
@@ -217,6 +213,8 @@ func (server *JKZDBServer) GetEntry(ctx context.Context, req *pb.GetEntryRequest
 
 func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.SetEntryPrepareBatchRequest) (*pb.SetEntryPrepareBatchResponse, error) {
 	// TODO: Implement, can lowkey just copy logic from above and loop, or abstract that^ logic and call a helper function and loop
+	// (shard:1) mail@mail.edu => 1
+	// (shard:1) 1 => data...
 	return nil, nil
 }
 

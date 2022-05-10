@@ -28,4 +28,5 @@ func main() {
 	api.Delete("", coordinator.ApiDeleteHandler)
 	api.Post("user", coordinator.CreateUserHandler)
 	transaction.Post("", coordinator.TransactionPostHandler)
+	app.Listen(":5000")
 }
