@@ -23,10 +23,13 @@ func main() {
 	api := app.Group("/api", func(ctx *fiber.Ctx) error {
 		return ctx.Next()
 	})
-	api.Get("", coordinator.ApiGetHandler)
-	api.Put("", coordinator.ApiPutHandler)
-	api.Delete("", coordinator.ApiDeleteHandler)
-	api.Post("user", coordinator.CreateUserHandler)
-	transaction.Post("", coordinator.TransactionPostHandler)
+	api.Get("/user", coordinator.GetUserHandler)
+	api.Put("/email", coordinator.EmailUpdateHandler)
+	api.Delete("", coordinator.DeleteUserHandler)
+	api.Post("/user", coordinator.CreateUserHandler)
+	api.Put("/deposit", coordinator.DepositHandler)
+	api.Put("/withdraw", coordinator.WithdrawalHandler)
+	transaction.Post("", coordinator.TransactionHandler)
+
 	app.Listen(":5000")
 }

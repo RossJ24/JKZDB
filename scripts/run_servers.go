@@ -36,7 +36,6 @@ func main() {
 			out, err := cmd.Output()
 			if err != nil {
 				fmt.Println(errBuf.String())
-				log.Fatalf(err.Error())
 			}
 			fmt.Println(string(out))
 			wg.Done()

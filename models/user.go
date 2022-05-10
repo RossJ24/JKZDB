@@ -14,7 +14,7 @@ func (user *User) ToMap() map[string]string {
 	rep := make(map[string]string)
 	rep["email"] = user.Email
 	rep["balance"] = fmt.Sprint(user.Balance)
-	rep["age"] = string(user.Age)
+	rep["age"] = fmt.Sprint(user.Age)
 	rep["account_opened_at"] = fmt.Sprint(user.AccountOpenedAt)
 	rep["last_used"] = fmt.Sprint(user.LastUsed)
 	return rep

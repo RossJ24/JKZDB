@@ -32,7 +32,7 @@ func (coordinator *Coordinator) SendPrepareRPC(conn *grpc.ClientConn, key string
 	}
 	_, err := client.SetEntryPrepare(context.TODO(), req)
 	if err != nil {
-		log.Printf("Prepare key(%s) failed: %v", idempotencyKey, err)
+		log.Printf("Prepare IdempotencyKey(%d) failed: %v", idempotencyKey, err)
 		return false
 	}
 	return true
@@ -45,12 +45,12 @@ func (coordinator *Coordinator) SendCommitRPC(conn *grpc.ClientConn, key string,
 		IdempotencyKey: idempotencyKey,
 		Key:            key,
 		Updates:        changes,
-		Unique:         false,
+		Unique:         unique,
 	}
 	for !committed {
 		_, err := client.SetEntryCommit(context.TODO(), req)
 		if err != nil {
-			log.Printf("Commit IdempotencyKey(%s) failed: %v", idempotencyKey, err)
+			log.Printf("Commit IdempotencyKey(%d) failed: %v", idempotencyKey, err)
 		} else {
 			committed = true
 		}
@@ -68,7 +68,7 @@ func (coordinator *Coordinator) SendAbortRPC(conn *grpc.ClientConn, idempotencyK
 	for !aborted {
 		_, err := client.SetEntryAbort(context.TODO(), req)
 		if err != nil {
-			log.Printf("Abort IdempotencyKey(%s) failed: %v", idempotencyKey, err)
+			log.Printf("Abort IdempotencyKey(%d) failed: %v", idempotencyKey, err)
 		} else {
 			aborted = true
 		}
@@ -92,7 +92,7 @@ func (coordinator *Coordinator) SendPrepareBatchRPC(conn *grpc.ClientConn, keys 
 	}
 	_, err := client.SetEntryPrepareBatch(context.TODO(), req)
 	if err != nil {
-		log.Printf("Prepare IdempotencyKey(%s) failed: %v", idempotencyKey, err)
+		log.Printf("Prepare IdempotencyKey(%d) failed: %v", idempotencyKey, err)
 		return false
 	}
 	return true
@@ -116,7 +116,7 @@ func (coordinator *Coordinator) SendCommitBatchRPC(conn *grpc.ClientConn, keys [
 	for !committed {
 		_, err := client.SetEntryCommitBatch(context.TODO(), req)
 		if err != nil {
-			log.Printf("Commit IdempotencyKey(%s) failed: %v", idempotencyKey, err)
+			log.Printf("Commit IdempotencyKey(%d) failed: %v", idempotencyKey, err)
 		} else {
 			committed = true
 		}
@@ -133,7 +133,7 @@ func (coordinator *Coordinator) SendAbortBatchRPC(conn *grpc.ClientConn, idempot
 	for !aborted {
 		_, err := client.SetEntryAbortBatch(context.TODO(), req)
 		if err != nil {
-			log.Printf("Abort IdempotencyKey(%s) failed: %v", idempotencyKey, err)
+			log.Printf("Abort IdempotencyKey(%d) failed: %v", idempotencyKey, err)
 		} else {
 			aborted = true
 		}
