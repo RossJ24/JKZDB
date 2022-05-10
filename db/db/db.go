@@ -58,7 +58,7 @@ func (jkzdb *JKZDB) GetValue(key string) (string, error) {
 		}
 		valueBytes := b.Get([]byte(key))
 		if valueBytes == nil {
-			return errors.New("Key doesn't exist.")
+			return nil
 		}
 		value = string(valueBytes)
 		return nil

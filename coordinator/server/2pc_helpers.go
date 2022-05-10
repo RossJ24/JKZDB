@@ -140,3 +140,12 @@ func (coordinator *Coordinator) SendAbortBatchRPC(conn *grpc.ClientConn, idempot
 	}
 	return true
 }
+
+func (coordinator *Coordinator) SendGetRPC(conn *grpc.ClientConn, key string, field *string) (*pb.GetEntryResponse, error) {
+	client := pb.NewJKZDBClient(conn)
+	req := &pb.GetEntryRequest{
+		Query: key,
+		Field: field,
+	}
+	return client.GetEntry(context.TODO(), req)
+}

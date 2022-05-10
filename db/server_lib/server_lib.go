@@ -42,6 +42,7 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 	if err != nil {
 		return nil, err
 	}
+	// If the value is supposed to be unique, but it already exists on this shard, then it's a bad request.
 	if len(val) != 0 && req.Unique {
 		return nil, status.Errorf(
 			codes.AlreadyExists,
@@ -54,7 +55,10 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 	} else if _, exists := req.Updates["transaction"]; exists {
 		// In this case it is just the balance being updated
 		user := &models.User{}
-		json.Unmarshal([]byte(val), &user)
+		err := json.Unmarshal([]byte(val), &user)
+		if err != nil {
+			return nil, err
+		}
 		delta, err := strconv.ParseInt(req.Updates["transaction"], 10, 64)
 		if err != nil {
 			return nil, err
@@ -65,7 +69,10 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 	} else if _, exists := req.Updates["email"]; exists && len(req.Updates) == 1 {
 		// In this case the user email is being updated
 		user := &models.User{}
-		json.Unmarshal([]byte(val), &user)
+		err := json.Unmarshal([]byte(val), &user)
+		if err != nil {
+			return nil, err
+		}
 		if user.Email == req.Updates["email"] {
 			return nil, status.Error(
 				codes.AlreadyExists,
@@ -73,7 +80,9 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 			)
 		}
 	} else if _, exists := req.Updates["del"]; exists {
-		// In this case a key is being deleted, nothing to check here. The check for existence is already done.
+		// In this case a key is being deleted, nothing to check here. The check for existence is already done above.
+	} else if req.Unique && len(req.Updates) == 5 {
+		// In this case a user is being created,
 	}
 	server.mx.RUnlock()
 	server.mx.Lock()
@@ -105,7 +114,10 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 		if err != nil {
 			return nil, err
 		}
-		json.Unmarshal([]byte(val), &user)
+		err = json.Unmarshal([]byte(val), &user)
+		if err != nil {
+			return nil, err
+		}
 		delta, err := strconv.ParseInt(req.Updates["transaction"], 10, 64)
 		if err != nil {
 			return nil, err
@@ -123,7 +135,10 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 		if err != nil {
 			return nil, err
 		}
-		json.Unmarshal([]byte(val), &user)
+		err = json.Unmarshal([]byte(val), &user)
+		if err != nil {
+			return nil, err
+		}
 		user.Email = req.Updates["email"]
 		newVal, err := json.Marshal(user)
 		if err != nil {
@@ -132,7 +147,7 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 		server.jkzdb.UpdateEntry(req.GetKey(), string(newVal))
 	} else if _, exists := req.Updates["del"]; exists {
 		// In this case a key is being deleted, nothing to check here
-		server.jkzdb.DeleteKey(req.Updates["del"])
+		server.jkzdb.DeleteKey(req.Key)
 	}
 	server.mx.Unlock()
 	return &pb.SetEntryCommitResponse{}, nil
@@ -162,10 +177,41 @@ func (server *JKZDBServer) GetEntry(ctx context.Context, req *pb.GetEntryRequest
 	if err != nil {
 		return nil, err
 	}
-	entry := make(map[string]string)
-	entry[req.Query] = value
+	if len(value) == 0 {
+		return nil, status.Errorf(
+			codes.NotFound,
+			"Key(%s) was not found",
+			req.Query,
+		)
+	}
+	user := &models.User{}
+	err = json.Unmarshal([]byte(value), user)
+	if err != nil {
+		return nil, err
+	}
+	if req.Field != nil {
+		value = user.ToMap()[*req.Field]
+	}
+	if err != nil {
+		return nil, err
+	}
 	resp := &pb.GetEntryResponse{
-		Entry: entry,
+		Entry: value,
 	}
 	return resp, nil
+}
+
+func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.SetEntryPrepareBatchRequest) (*pb.SetEntryPrepareBatchResponse, error) {
+	// TODO: Implement, can lowkey just copy logic from above and loop, or abstract that^ logic and call a helper function and loop
+	return nil, nil
+}
+
+func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetEntryCommitBatchRequest) (*pb.SetEntryCommitBatchResponse, error) {
+	// TODO: Implement, can lowkey just copy logic from above and loop, or abstract that^ logic and call a helper function and loop
+	return nil, nil
+}
+
+func (server *JKZDBServer) SetEntryAbortBatch(ctx context.Context, req *pb.SetEntryAbortBatchRequest) (*pb.SetEntryAbortBatchResponse, error) {
+	// TODO: Implement, can lowkey just copy logic from above and loop, or abstract that^ logic and call a helper function and loop
+	return nil, nil
 }

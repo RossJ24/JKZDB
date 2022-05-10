@@ -62,7 +62,7 @@ message GetEntryRequest{
 }
 
 message GetEntryResponse{
-    map<string, string> entry = 3;
+    string entry = 3;
 }
 
 service JKZDB {
