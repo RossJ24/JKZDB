@@ -342,7 +342,7 @@ func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.Set
 				"Batched: Key already exists",
 			)
 		}
-	
+
 		if _, exists := updates["key"]; exists {
 			// In this case, it is just a key like email:mail@mail.com => 1 being added
 		} else if _, exists := updates["transaction"]; exists {

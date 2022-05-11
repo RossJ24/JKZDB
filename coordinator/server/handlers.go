@@ -419,7 +419,7 @@ func (coordinator *Coordinator) TransactionHandler(ctx *fiber.Ctx) error {
 			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		}
 	}
-	
+
 	return ctx.SendStatus(fiber.StatusOK)
 }
 
@@ -513,6 +513,8 @@ func (coordinator *Coordinator) WithdrawalHandler(ctx *fiber.Ctx) error {
 			},
 			idempotencyKey,
 			false)
+	} else {
+		return ctx.SendStatus(fiber.StatusPreconditionFailed)
 	}
 
 	return ctx.SendStatus(fiber.StatusOK)
@@ -539,7 +541,7 @@ func (coordinator *Coordinator) DepositHandler(ctx *fiber.Ctx) error {
 		query = CreateQuery("id", res.Entry)
 		shard = coordinator.ShardForKey(query)
 	}
-	
+
 	idempotencyKey := time.Now().Unix()
 	if coordinator.SendPrepareRPC(
 		shard,
