@@ -298,14 +298,48 @@ func (coordinator *Coordinator) DeleteUserHandler(ctx *fiber.Ctx) error {
 }
 
 func (coordinator *Coordinator) TransactionHandler(ctx *fiber.Ctx) error {
+	index := ctx.Query("index", "id")
 	// Id of the recipient of the transaction
 	to := ctx.Query("to")
 	// Id of the sender of the transaction
 	from := ctx.Query("from")
 	amount := ctx.Query("amount")
 	fmt.Println(amount)
-	fromQuery := CreateQuery("id", from)
-	toQuery := CreateQuery("id", to)
+
+	var fromQuery string
+	var toQuery string
+
+	if index != "id" {
+		fromQuery = CreateQuery(index, from)
+		toQuery = CreateQuery(index, to)
+
+		fromConn := coordinator.ShardForKey(fromQuery)
+		toConn := coordinator.ShardForKey(toQuery)
+		fromClient := pb.NewJKZDBClient(fromConn)
+		toClient := pb.NewJKZDBClient(toConn)
+
+		res, err := fromClient.GetEntry(context.Background(), &pb.GetEntryRequest{
+			Query: fromQuery,
+			Field: nil,
+		})
+		if err != nil {
+			return err
+		}
+		fromQuery = CreateQuery("id", res.GetEntry())
+
+		res, err = toClient.GetEntry(context.Background(), &pb.GetEntryRequest{
+			Query: toQuery,
+			Field: nil,
+		})
+		if err != nil {
+			return err
+		}
+		toQuery = CreateQuery("id", res.GetEntry())
+	} else {
+		fromQuery = CreateQuery("id", from)
+		toQuery = CreateQuery("id", to)
+	}
+
 	amt, err := strconv.ParseInt(amount, 10, 64)
 	if err != nil {
 		return err
