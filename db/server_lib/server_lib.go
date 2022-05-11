@@ -363,7 +363,7 @@ func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.Set
 					req.Keys[i],
 				)
 			}
-		} else if _, exists := updates["email"]; exists && len(req.Updates) == 1 {
+		} else if _, exists := updates["email"]; exists && len(updates) == 1 {
 			// In this case the user email is being updated
 			user := &models.User{}
 			err := json.Unmarshal([]byte(val), &user)
@@ -390,7 +390,7 @@ func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.Set
 					keys[i],
 				)
 			}
-		} else if unique && len(req.Updates) == 5 {
+		} else if unique && len(updates) == 5 {
 			// In this case a user is being created, nothing else to check here. We already know the new key doesn't exist
 		} else if _, exists := updates["withdrawal"]; exists {
 			user := &models.User{}
@@ -464,7 +464,7 @@ func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetE
 				return nil, err
 			}
 			server.jkzdb.UpdateEntry(keys[i], string(newVal))
-		} else if _, exists := updates["email"]; exists && len(req.Updates) == 1 {
+		} else if _, exists := updates["email"]; exists && len(updates) == 1 {
 			// In this case the user email is being updated
 			user := &models.User{}
 			val, err := server.jkzdb.GetValue(keys[i])
@@ -484,7 +484,7 @@ func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetE
 		} else if _, exists := updates["del"]; exists {
 			// In this case a key is being deleted, nothing to check here
 			server.jkzdb.DeleteKey(keys[i])
-		} else if req.Updates[i].Unique && len(req.Updates) == 5 {
+		} else if req.Updates[i].Unique && len(updates) == 5 {
 			// In this case a user is being created
 			newUser := models.User{}
 			newUser.Email = updates["email"]
