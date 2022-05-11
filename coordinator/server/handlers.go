@@ -58,12 +58,24 @@ func (coordinator *Coordinator) GetUserHandler(ctx *fiber.Ctx) error {
 }
 
 func (coordinator *Coordinator) EmailUpdateHandler(ctx *fiber.Ctx) error {
-	id := ctx.Query("id")
 	oldEmail := ctx.Query("old-email")
 	newEmail := ctx.Query("new-email")
 	oldEmailQuery := CreateQuery("email", oldEmail)
 	newEmailQuery := CreateQuery("email", newEmail)
-	idQuery := CreateQuery("id", fmt.Sprint(id))
+
+	conn := coordinator.ShardForKey(oldEmailQuery)
+	client := pb.NewJKZDBClient(conn)
+	req := &pb.GetEntryRequest{
+		Query: oldEmailQuery,
+		Field: nil,
+	}
+	res, err := client.GetEntry(context.Background(), req)
+	if err != nil {
+		return err
+	}
+	id := res.GetEntry()
+	idQuery := CreateQuery("id", id)
+
 	// This can be a 3, 2 or 1 shard update.
 	primaryShard := coordinator.ShardForKey(idQuery)
 	oldEmailShard := coordinator.ShardForKey(oldEmailQuery)
