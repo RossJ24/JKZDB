@@ -13,16 +13,19 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Creates a formatted query
 func CreateQuery(index string, key string) string {
 	return fmt.Sprintf("%s:%s", index, key)
 }
 
-// Handles Get Requests to the
+// Handles GET API requests
 func (coordinator *Coordinator) GetUserHandler(ctx *fiber.Ctx) error {
 	index := ctx.Query("index", "id")
 	key := ctx.Query("key")
 	field := ctx.Query("field")
 	query := CreateQuery(index, key)
+
+	// find primary key id if email index is used instead
 	if index != "id" {
 		conn := coordinator.ShardForKey(query)
 		client := pb.NewJKZDBClient(conn)
@@ -36,6 +39,8 @@ func (coordinator *Coordinator) GetUserHandler(ctx *fiber.Ctx) error {
 		}
 		query = CreateQuery("id", res.GetEntry())
 	}
+
+	// Retrieve the user account entry
 	conn := coordinator.ShardForKey(query)
 	client := pb.NewJKZDBClient(conn)
 	var req *pb.GetEntryRequest
@@ -57,12 +62,14 @@ func (coordinator *Coordinator) GetUserHandler(ctx *fiber.Ctx) error {
 	return ctx.Status(fiber.StatusOK).JSON(res.GetEntry())
 }
 
+// Handles PUT API requests for updating a user's email
 func (coordinator *Coordinator) EmailUpdateHandler(ctx *fiber.Ctx) error {
 	oldEmail := ctx.Query("old-email")
 	newEmail := ctx.Query("new-email")
 	oldEmailQuery := CreateQuery("email", oldEmail)
 	newEmailQuery := CreateQuery("email", newEmail)
 
+	// Retrieve the account's primary key id associated with the current/old email
 	conn := coordinator.ShardForKey(oldEmailQuery)
 	client := pb.NewJKZDBClient(conn)
 	req := &pb.GetEntryRequest{
@@ -76,7 +83,7 @@ func (coordinator *Coordinator) EmailUpdateHandler(ctx *fiber.Ctx) error {
 	id := res.GetEntry()
 	idQuery := CreateQuery("id", id)
 
-	// This can be a 3, 2 or 1 shard update.
+	// Get relevant shards and prepare all the necessary changes (delete the old email, update key mapping, update new email)
 	primaryShard := coordinator.ShardForKey(idQuery)
 	oldEmailShard := coordinator.ShardForKey(oldEmailQuery)
 	newEmailShard := coordinator.ShardForKey(newEmailQuery)
@@ -89,124 +96,110 @@ func (coordinator *Coordinator) EmailUpdateHandler(ctx *fiber.Ctx) error {
 
 	// 1 shard update
 	if primaryShard == oldEmailShard && oldEmailShard == newEmailShard {
-		// fmt.Println("1 shard prepare")
 		keys := []string{idQuery, oldEmailQuery, newEmailQuery}
 		changes := []map[string]string{emailChanges, oldEmailMap, newEmailMap}
-		// Matthew: Ross, please check if all should be unique
 		unique := []bool{false, false, true}
+
 		if coordinator.SendPrepareBatchRPC(primaryShard, keys, changes, idempotencyKey, unique) {
-			// fmt.Println("1 shard commit")
 			coordinator.SendCommitBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
 		} else {
-			// fmt.Println("1 shard abort")
 			coordinator.SendAbortBatchRPC(primaryShard, idempotencyKey)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		}
 	} else if primaryShard == oldEmailShard {
-		// fmt.Println("2 shard prepare 1")
 		// 2 shard update: primary and oldEmail
 		keys := []string{idQuery, oldEmailQuery}
 		changes := []map[string]string{emailChanges, oldEmailMap}
 		unique := []bool{false, false}
+
 		batchRes := coordinator.SendPrepareBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
 		newEmailRes := coordinator.SendPrepareRPC(newEmailShard, newEmailQuery, newEmailMap, idempotencyKey, true)
 
 		if batchRes && newEmailRes {
-			// fmt.Println("2 shard commit 1")
 			coordinator.SendCommitBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
 			coordinator.SendCommitRPC(newEmailShard, newEmailQuery, newEmailMap, idempotencyKey, true)
 		} else if batchRes {
-			// fmt.Println("2 shard abort 1")
 			coordinator.SendAbortRPC(newEmailShard, idempotencyKey)
-			return ctx.SendStatus(fiber.StatusExpectationFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		} else {
-			// fmt.Println("2 shard abort 1")
 			coordinator.SendAbortBatchRPC(primaryShard, idempotencyKey)
-			return ctx.SendStatus(fiber.StatusExpectationFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		}
 	} else if primaryShard == newEmailShard {
-		// fmt.Println("2 shard prepare 2")
 		// 2 shard update: primary and newEmail
-		// Matthew: Ross, check for typos in function calls, copying/pasting for this code (maybe make into function later?)
 		keys := []string{idQuery, newEmailQuery}
 		changes := []map[string]string{emailChanges, newEmailMap}
 		unique := []bool{false, true}
+
 		batchRes := coordinator.SendPrepareBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
 		oldEmailRes := coordinator.SendPrepareRPC(oldEmailShard, oldEmailQuery, oldEmailMap, idempotencyKey, false)
 
 		if batchRes && oldEmailRes {
-			// fmt.Println("2 shard commit 2")
 			coordinator.SendCommitBatchRPC(primaryShard, keys, changes, idempotencyKey, unique)
 			coordinator.SendCommitRPC(oldEmailShard, oldEmailQuery, oldEmailMap, idempotencyKey, false)
 		} else if batchRes {
-			// fmt.Println("2 shard abort 2")
 			coordinator.SendAbortRPC(oldEmailShard, idempotencyKey)
-			return ctx.SendStatus(fiber.StatusExpectationFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		} else {
-			// fmt.Println("2 shard abort 2")
 			coordinator.SendAbortBatchRPC(primaryShard, idempotencyKey)
-			return ctx.SendStatus(fiber.StatusExpectationFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		}
 	} else if oldEmailShard == newEmailShard {
 		// 2 shard update: oldEmail and newEmail
-		// fmt.Println("2 shard prepare 3")
 		keys := []string{oldEmailQuery, newEmailQuery}
 		changes := []map[string]string{oldEmailMap, newEmailMap}
 		unique := []bool{false, true}
+
 		batchRes := coordinator.SendPrepareBatchRPC(oldEmailShard, keys, changes, idempotencyKey, unique)
 		primaryRes := coordinator.SendPrepareRPC(primaryShard, idQuery, emailChanges, idempotencyKey, false)
 
 		if batchRes && primaryRes {
-			// fmt.Println("2 shard commit 3")
 			coordinator.SendCommitBatchRPC(oldEmailShard, keys, changes, idempotencyKey, unique)
 			coordinator.SendCommitRPC(primaryShard, idQuery, emailChanges, idempotencyKey, false)
 		} else if batchRes {
-			// fmt.Println("2 shard abort 3")
 			coordinator.SendAbortRPC(primaryShard, idempotencyKey)
-			return ctx.SendStatus(fiber.StatusExpectationFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		} else {
-			// fmt.Println("2 shard abort 3")
 			coordinator.SendAbortBatchRPC(oldEmailShard, idempotencyKey)
-			return ctx.SendStatus(fiber.StatusExpectationFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		}
 	} else {
 		// 3 shard update
-		// fmt.Println("3 shard prepare")
 		primaryRes := coordinator.SendPrepareRPC(primaryShard, idQuery, emailChanges, idempotencyKey, false)
 		oldEmailRes := coordinator.SendPrepareRPC(oldEmailShard, oldEmailQuery, oldEmailMap, idempotencyKey, false)
 		newEmailRes := coordinator.SendPrepareRPC(newEmailShard, newEmailQuery, newEmailMap, idempotencyKey, true)
 
 		if primaryRes && oldEmailRes && newEmailRes {
-			// fmt.Println("3 shard commit")
 			coordinator.SendCommitRPC(primaryShard, idQuery, emailChanges, idempotencyKey, false)
 			coordinator.SendCommitRPC(oldEmailShard, oldEmailQuery, oldEmailMap, idempotencyKey, false)
 			coordinator.SendCommitRPC(newEmailShard, newEmailQuery, newEmailMap, idempotencyKey, true)
 		} else if primaryRes && oldEmailRes {
-			// fmt.Println("3 shard abort 1")
 			coordinator.SendAbortRPC(newEmailShard, idempotencyKey)
-			return ctx.SendStatus(fiber.StatusExpectationFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		} else if primaryRes && newEmailRes {
-			// fmt.Println("3 shard abort 2")
 			coordinator.SendAbortRPC(oldEmailShard, idempotencyKey)
-			return ctx.SendStatus(fiber.StatusExpectationFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		} else if oldEmailRes && newEmailRes {
-			// fmt.Println("3 shard abort 3")
 			coordinator.SendAbortRPC(primaryShard, idempotencyKey)
-			return ctx.SendStatus(fiber.StatusExpectationFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		}
 	}
 
 	return ctx.SendStatus(fiber.StatusOK)
 }
 
+// Handles DELETE API requests
 func (coordinator *Coordinator) DeleteUserHandler(ctx *fiber.Ctx) error {
-	index := ctx.Query("index", "id")
-	key := ctx.Query("key")
 	var primaryQuery string
 	var primaryShard *grpc.ClientConn
 	var emailQuery string
 	var emailShard *grpc.ClientConn
+
+	index := ctx.Query("index", "id")
+	key := ctx.Query("key")
+
+	// Given the primary key id to delete, we also need the email to delete
 	if index != "email" {
-		// Gioven Primary ID as Key to Delete, now we need the email too
 		primaryQuery = CreateQuery(index, key)
 		field := "email"
 		primaryShard = coordinator.ShardForKey(primaryQuery)
@@ -226,6 +219,7 @@ func (coordinator *Coordinator) DeleteUserHandler(ctx *fiber.Ctx) error {
 		primaryQuery = CreateQuery("id", res.Entry)
 		primaryShard = coordinator.ShardForKey(primaryQuery)
 	}
+
 	idempotencyKey := time.Now().Unix()
 	delMap := map[string]string{"del": ""}
 	if primaryShard == emailShard {
@@ -257,6 +251,7 @@ func (coordinator *Coordinator) DeleteUserHandler(ctx *fiber.Ctx) error {
 			)
 		} else {
 			coordinator.SendAbortBatchRPC(emailShard, idempotencyKey)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		}
 	} else {
 		fromRes := coordinator.SendPrepareRPC(
@@ -290,25 +285,30 @@ func (coordinator *Coordinator) DeleteUserHandler(ctx *fiber.Ctx) error {
 			)
 		} else if fromRes && !toRes {
 			coordinator.SendAbortBatchRPC(primaryShard, idempotencyKey)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		} else if toRes && !fromRes {
 			coordinator.SendAbortBatchRPC(emailShard, idempotencyKey)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		}
 	}
-	return nil
+
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
+// Handles POST API requests for transactions
 func (coordinator *Coordinator) TransactionHandler(ctx *fiber.Ctx) error {
 	index := ctx.Query("index", "id")
-	// Id of the recipient of the transaction
-	to := ctx.Query("to")
-	// Id of the sender of the transaction
-	from := ctx.Query("from")
 	amount := ctx.Query("amount")
-	fmt.Println(amount)
+
+	// id of the recipient of the transaction
+	to := ctx.Query("to")
+	// id of the sender of the transaction
+	from := ctx.Query("from")
 
 	var fromQuery string
 	var toQuery string
 
+	// find primary key ids if email index is used instead
 	if index != "id" {
 		fromQuery = CreateQuery(index, from)
 		toQuery = CreateQuery(index, to)
@@ -413,20 +413,23 @@ func (coordinator *Coordinator) TransactionHandler(ctx *fiber.Ctx) error {
 			)
 		} else if fromRes && !toRes {
 			coordinator.SendAbortRPC(fromShard, idempotencyKey)
-			ctx.SendStatus(fiber.StatusPreconditionFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		} else if toRes && !fromRes {
 			coordinator.SendAbortRPC(toShard, idempotencyKey)
-			ctx.SendStatus(fiber.StatusPreconditionFailed)
+			return ctx.SendStatus(fiber.StatusPreconditionFailed)
 		}
 	}
-	return nil
+	
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
+// Handles POST API requests to create users
 func (coordinator *Coordinator) CreateUserHandler(ctx *fiber.Ctx) error {
 	user := &models.User{}
 	if err := ctx.BodyParser(user); err != nil {
 		return err
 	}
+
 	userId := atomic.AddInt64(&coordinator.nextId, 1)
 	userMap := user.ToMap()
 	emailKey := CreateQuery("email", userMap["email"])
@@ -435,6 +438,7 @@ func (coordinator *Coordinator) CreateUserHandler(ctx *fiber.Ctx) error {
 	primaryShard := coordinator.ShardForKey(primaryKey)
 	idempotencyKey := time.Now().Unix()
 	emailChanges := map[string]string{"key": fmt.Sprint(userId)}
+
 	if emailShard == primaryShard {
 		keys := []string{emailKey, primaryKey}
 		changes := []map[string]string{emailChanges, userMap}
@@ -466,9 +470,11 @@ func (coordinator *Coordinator) CreateUserHandler(ctx *fiber.Ctx) error {
 	if err != nil {
 		return nil
 	}
+
 	return ctx.SendStatus(fiber.StatusCreated)
 }
 
+// Handles PUT API requests for withdraws
 func (coordinator *Coordinator) WithdrawalHandler(ctx *fiber.Ctx) error {
 	index := ctx.Query("index", "id")
 	key := ctx.Query("key")
@@ -477,8 +483,10 @@ func (coordinator *Coordinator) WithdrawalHandler(ctx *fiber.Ctx) error {
 	if err != nil {
 		return nil
 	}
+
 	query := CreateQuery(index, key)
 	shard := coordinator.ShardForKey(query)
+
 	if index != "id" {
 		res, err := coordinator.SendGetRPC(shard, query, nil)
 		if err != nil {
@@ -487,6 +495,7 @@ func (coordinator *Coordinator) WithdrawalHandler(ctx *fiber.Ctx) error {
 		query = CreateQuery("id", res.Entry)
 		shard = coordinator.ShardForKey(query)
 	}
+
 	idempotencyKey := time.Now().Unix()
 	if coordinator.SendPrepareRPC(
 		shard,
@@ -505,9 +514,11 @@ func (coordinator *Coordinator) WithdrawalHandler(ctx *fiber.Ctx) error {
 			idempotencyKey,
 			false)
 	}
+
 	return ctx.SendStatus(fiber.StatusOK)
 }
 
+// Handles PUT API requests for deposits
 func (coordinator *Coordinator) DepositHandler(ctx *fiber.Ctx) error {
 	index := ctx.Query("index", "id")
 	key := ctx.Query("key")
@@ -516,8 +527,10 @@ func (coordinator *Coordinator) DepositHandler(ctx *fiber.Ctx) error {
 	if err != nil {
 		return nil
 	}
+
 	query := CreateQuery(index, key)
 	shard := coordinator.ShardForKey(query)
+
 	if index != "id" {
 		res, err := coordinator.SendGetRPC(shard, query, nil)
 		if err != nil {
@@ -526,6 +539,7 @@ func (coordinator *Coordinator) DepositHandler(ctx *fiber.Ctx) error {
 		query = CreateQuery("id", res.Entry)
 		shard = coordinator.ShardForKey(query)
 	}
+	
 	idempotencyKey := time.Now().Unix()
 	if coordinator.SendPrepareRPC(
 		shard,
@@ -544,5 +558,6 @@ func (coordinator *Coordinator) DepositHandler(ctx *fiber.Ctx) error {
 			idempotencyKey,
 			false)
 	}
+
 	return ctx.SendStatus(fiber.StatusOK)
 }
