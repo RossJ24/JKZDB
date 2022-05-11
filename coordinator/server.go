@@ -25,7 +25,7 @@ func main() {
 	})
 	api.Get("/user", coordinator.GetUserHandler)
 	api.Put("/email", coordinator.EmailUpdateHandler)
-	api.Delete("", coordinator.DeleteUserHandler)
+	api.Delete("/user", coordinator.DeleteUserHandler)
 	api.Post("/user", coordinator.CreateUserHandler)
 	api.Put("/deposit", coordinator.DepositHandler)
 	api.Put("/withdraw", coordinator.WithdrawalHandler)
