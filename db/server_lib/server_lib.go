@@ -38,11 +38,13 @@ func MakeJKZDBServer(port int) (*JKZDBServer, error) {
 
 func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntryPrepareRequest) (*pb.SetEntryPrepareResponse, error) {
 	server.mx.Lock()
+
 	val, err := server.jkzdb.GetValue(req.GetKey())
 	if err != nil {
 		return nil, err
 	}
-	// If the value is supposed to be unique, but it already exists on this shard, then it's a bad request.
+
+	// if the value is supposed to be unique, but it already exists on this shard, then it's a bad request
 	if len(val) != 0 && req.Unique {
 		server.mx.Unlock()
 		return nil, status.Errorf(
@@ -50,11 +52,11 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 			"Key already exists",
 		)
 	}
-	// add another option for del
+
 	if _, exists := req.Updates["key"]; exists {
-		// In this case it is just a key like email:mail@mail.com => 1 being added
+		// In this case, it is just a key like email:mail@mail.com => 1 being added
 	} else if _, exists := req.Updates["transaction"]; exists {
-		// In this case it is just the balance being updated
+		// In this case, it is just the balance being updated
 		user := &models.User{}
 		err := json.Unmarshal([]byte(val), &user)
 		if err != nil {
@@ -62,12 +64,10 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 		}
 		delta, err := strconv.ParseInt(req.Updates["transaction"], 10, 64)
 		if err != nil {
-
 			server.mx.Unlock()
 			return nil, err
 		}
 		if user.Balance+delta < 0 {
-
 			server.mx.Unlock()
 			return nil, status.Errorf(
 				codes.FailedPrecondition,
@@ -76,16 +76,14 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 			)
 		}
 	} else if _, exists := req.Updates["email"]; exists && len(req.Updates) == 1 {
-		// In this case the user email is being updated
+		// In this case, the user email is being updated
 		user := &models.User{}
 		err := json.Unmarshal([]byte(val), &user)
 		if err != nil {
-
 			server.mx.Unlock()
 			return nil, err
 		}
 		if user.Email == req.Updates["email"] {
-
 			server.mx.Unlock()
 			return nil, status.Error(
 				codes.AlreadyExists,
@@ -93,7 +91,7 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 			)
 		}
 	} else if _, exists := req.Updates["del"]; exists {
-		// In this case a key is being deleted
+		// In this case, a key is being deleted
 		if len(val) == 0 {
 			server.mx.Unlock()
 			fmt.Printf("%v\n", req.Updates)
@@ -104,8 +102,10 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 			)
 		}
 	} else if req.Unique && len(req.Updates) == 5 {
-		// In this case a user is being created, nothing else to check here. We already know the new key doesn't exist
+		// In this case, a user is being created, nothing else to check here
+		// We already know the new key doesn't exist
 	} else if _, exists := req.Updates["withdrawal"]; exists {
+		// In this case, a withdrawal is being made
 		user := &models.User{}
 		err := json.Unmarshal([]byte(val), &user)
 		if err != nil {
@@ -113,12 +113,10 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 		}
 		delta, err := strconv.ParseInt(req.Updates["withdrawal"], 10, 64)
 		if err != nil {
-
 			server.mx.Unlock()
 			return nil, err
 		}
 		if user.Balance+delta < 0 {
-
 			server.mx.Unlock()
 			return nil, status.Errorf(
 				codes.FailedPrecondition,
@@ -128,8 +126,10 @@ func (server *JKZDBServer) SetEntryPrepare(ctx context.Context, req *pb.SetEntry
 		}
 
 	} else if _, exists := req.Updates["deposit"]; exists {
+		// In this case, a deposit is being made
 		// Nothing to check here
 	}
+
 	atomic.StoreInt64(&server.currentUpdate, req.IdempotencyKey)
 	return &pb.SetEntryPrepareResponse{}, nil
 }
@@ -149,7 +149,7 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 		server.jkzdb.UpdateEntry(req.GetKey(), req.Updates["key"])
 
 	} else if _, exists := req.Updates["transaction"]; exists {
-		// In this case it is just the balance being updated
+		// In this case, it is just the balance being updated
 		user := &models.User{}
 		val, err := server.jkzdb.GetValue(req.GetKey())
 		if err != nil {
@@ -172,7 +172,7 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 		server.jkzdb.UpdateEntry(req.GetKey(), string(newVal))
 
 	} else if _, exists := req.Updates["email"]; exists && len(req.Updates) == 1 {
-		// In this case the user email is being updated
+		// In this case, the user email is being updated
 		user := &models.User{}
 		val, err := server.jkzdb.GetValue(req.GetKey())
 		if err != nil {
@@ -191,11 +191,11 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 		server.jkzdb.UpdateEntry(req.GetKey(), string(newVal))
 
 	} else if _, exists := req.Updates["del"]; exists {
-		// In this case a key is being deleted, nothing to check here
+		// In this case, a key is being deleted, nothing to check here
 		server.jkzdb.DeleteKey(req.Key)
 
 	} else if req.Unique && len(req.Updates) == 5 {
-		// In this case a user is being created
+		// In this case, a user is being created
 		newUser := models.User{}
 		newUser.Email = req.Updates["email"]
 		age, err := strconv.ParseInt(req.Updates["age"], 10, 32)
@@ -216,6 +216,7 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 		server.jkzdb.UpdateEntry(req.GetKey(), string(newVal))
 
 	} else if _, exists := req.Updates["withdrawal"]; exists {
+		// In this case, a withdrawal is being made
 		user := &models.User{}
 		val, err := server.jkzdb.GetValue(req.GetKey())
 		if err != nil {
@@ -238,6 +239,7 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 		server.jkzdb.UpdateEntry(req.GetKey(), string(newVal))
 
 	} else if _, exists := req.Updates["deposit"]; exists {
+		// in this case, a deposit is being made
 		user := &models.User{}
 		val, err := server.jkzdb.GetValue(req.GetKey())
 		if err != nil {
@@ -259,6 +261,7 @@ func (server *JKZDBServer) SetEntryCommit(ctx context.Context, req *pb.SetEntryC
 		}
 		server.jkzdb.UpdateEntry(req.GetKey(), string(newVal))
 	}
+
 	server.mx.Unlock()
 	return &pb.SetEntryCommitResponse{}, nil
 }
@@ -274,6 +277,7 @@ func (server *JKZDBServer) SetEntryAbort(ctx context.Context, req *pb.SetEntryAb
 			req.IdempotencyKey,
 		)
 	}
+
 	atomic.StoreInt64(&server.currentUpdate, 0)
 	server.mx.Unlock()
 	return &pb.SetEntryAbortResponse{}, nil
@@ -282,6 +286,7 @@ func (server *JKZDBServer) SetEntryAbort(ctx context.Context, req *pb.SetEntryAb
 func (server *JKZDBServer) GetEntry(ctx context.Context, req *pb.GetEntryRequest) (*pb.GetEntryResponse, error) {
 	server.mx.RLock()
 	defer server.mx.RUnlock()
+
 	value, err := server.jkzdb.GetValue(req.Query)
 	if err != nil {
 		return nil, err
@@ -293,6 +298,7 @@ func (server *JKZDBServer) GetEntry(ctx context.Context, req *pb.GetEntryRequest
 			req.Query,
 		)
 	}
+
 	emailQuery, err := regexp.MatchString("email", req.Query)
 	if err != nil {
 		return nil, err
@@ -310,13 +316,11 @@ func (server *JKZDBServer) GetEntry(ctx context.Context, req *pb.GetEntryRequest
 	resp := &pb.GetEntryResponse{
 		Entry: value,
 	}
+
 	return resp, nil
 }
 
 func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.SetEntryPrepareBatchRequest) (*pb.SetEntryPrepareBatchResponse, error) {
-	// TODO: Implement, can lowkey just copy logic from above and loop, or abstract that^ logic and call a helper function and loop
-	// Matthew: Ross, I basically copied the code above and re-used it in a loop, you should check it
-
 	keys := req.GetKeys()
 	updateMap := req.GetUpdates()
 	server.mx.Lock()
@@ -338,11 +342,11 @@ func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.Set
 				"Batched: Key already exists",
 			)
 		}
-		// add another option for del
+	
 		if _, exists := updates["key"]; exists {
-			// In this case it is just a key like email:mail@mail.com => 1 being added
+			// In this case, it is just a key like email:mail@mail.com => 1 being added
 		} else if _, exists := updates["transaction"]; exists {
-			// In this case it is just the balance being updated
+			// In this case, it is just the balance being updated
 			user := &models.User{}
 			err := json.Unmarshal([]byte(val), &user)
 			if err != nil {
@@ -364,7 +368,7 @@ func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.Set
 				)
 			}
 		} else if _, exists := updates["email"]; exists && len(updates) == 1 {
-			// In this case the user email is being updated
+			// In this case, the user email is being updated
 			user := &models.User{}
 			err := json.Unmarshal([]byte(val), &user)
 			if err != nil {
@@ -381,7 +385,7 @@ func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.Set
 				)
 			}
 		} else if _, exists := updates["del"]; exists {
-			// In this case a key is being deleted
+			// In this case, a key is being deleted
 			if len(val) == 0 {
 				server.mx.Unlock()
 				return nil, status.Errorf(
@@ -391,8 +395,10 @@ func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.Set
 				)
 			}
 		} else if unique && len(updates) == 5 {
-			// In this case a user is being created, nothing else to check here. We already know the new key doesn't exist
+			// In this case, a user is being created, nothing else to check here
+			// We already know the new key doesn't exist
 		} else if _, exists := updates["withdrawal"]; exists {
+			// In this case, a withdrawal is being made
 			user := &models.User{}
 			err := json.Unmarshal([]byte(val), &user)
 			if err != nil {
@@ -415,6 +421,7 @@ func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.Set
 			}
 
 		} else if _, exists := updates["deposit"]; exists {
+			// In this case, a deposit is being made
 			// Nothing to check here
 		}
 
@@ -425,7 +432,6 @@ func (server *JKZDBServer) SetEntryPrepareBatch(ctx context.Context, req *pb.Set
 }
 
 func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetEntryCommitBatchRequest) (*pb.SetEntryCommitBatchResponse, error) {
-	// TODO: Implement, can lowkey just copy logic from above and loop, or abstract that^ logic and call a helper function and loop
 	keys := req.GetKeys()
 	updateMap := req.GetUpdates()
 
@@ -444,7 +450,7 @@ func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetE
 		if _, exists := updates["key"]; exists {
 			server.jkzdb.UpdateEntry(keys[i], updates["key"])
 		} else if _, exists := updates["transaction"]; exists {
-			// In this case it is just the balance being updated
+			// In this case, it is just the balance being updated
 			user := &models.User{}
 			val, err := server.jkzdb.GetValue(keys[i])
 			if err != nil {
@@ -465,7 +471,7 @@ func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetE
 			}
 			server.jkzdb.UpdateEntry(keys[i], string(newVal))
 		} else if _, exists := updates["email"]; exists && len(updates) == 1 {
-			// In this case the user email is being updated
+			// In this case, the user email is being updated
 			user := &models.User{}
 			val, err := server.jkzdb.GetValue(keys[i])
 			if err != nil {
@@ -482,10 +488,10 @@ func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetE
 			}
 			server.jkzdb.UpdateEntry(keys[i], string(newVal))
 		} else if _, exists := updates["del"]; exists {
-			// In this case a key is being deleted, nothing to check here
+			// In this case, a key is being deleted, nothing to check here
 			server.jkzdb.DeleteKey(keys[i])
 		} else if req.Updates[i].Unique && len(updates) == 5 {
-			// In this case a user is being created
+			// In this case, a user is being created
 			newUser := models.User{}
 			newUser.Email = updates["email"]
 			age, err := strconv.ParseInt(updates["age"], 10, 32)
@@ -505,6 +511,7 @@ func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetE
 			}
 			server.jkzdb.UpdateEntry(req.Keys[i], string(newVal))
 		} else if _, exists := updates["withdrawal"]; exists {
+			// In this case, a withdrawal is being made
 			user := &models.User{}
 			val, err := server.jkzdb.GetValue(req.Keys[i])
 			if err != nil {
@@ -527,6 +534,7 @@ func (server *JKZDBServer) SetEntryCommitBatch(ctx context.Context, req *pb.SetE
 			server.jkzdb.UpdateEntry(req.Keys[i], string(newVal))
 
 		} else if _, exists := updates["deposit"]; exists {
+			// In this case, a deposit is being made
 			user := &models.User{}
 			val, err := server.jkzdb.GetValue(req.Keys[i])
 			if err != nil {
