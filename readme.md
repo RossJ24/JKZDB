@@ -63,7 +63,9 @@ We recorded a demo video of how we tested JKZDB. The Zoom link contains two reco
 ## Group Work
 
 Matthew - Debugged and wrote API handlers, wrote batch 2PC RPCs, worked on report
+
 Surtaz - Worked on 2PC RPCs, API handlers, worked on report
+
 Ross - Worked on creating JKZDB over BoltDB, 2PC RPCs, API handlers, worked on report
 
 As a group, we all discussed major design choices such as the database schema before implementing. We also constantly worked together and collaborated on code together over Zoom.
