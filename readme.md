@@ -26,9 +26,9 @@ go run stop_servers.go
 
 To test the API, you can use an application like Postman to send API requests to the proper URL.
 
-## API Routes
+## API Endpoints
 
-The schema for our user model can be found in `/models/user.go`. Here are the available API routes.
+The schema for our user model can be found in `/models/user.go`. Here are the available API endpoints.
 
 - GET /api/user?index=id&key=\<pk>
 
