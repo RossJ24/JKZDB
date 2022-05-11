@@ -50,12 +50,20 @@ The schema for our user model can be found in `/models/user.go`. Here are the av
 
 - PUT /api/deposit?amount=\<amount>&index=email&key=\<email>
 
-- DELETE /api?index=id&key=\<pk>
+- DELETE /api/user?index=id&key=\<pk>
 
-- DELETE /api?index=email&key=\<email>
+- DELETE /api/user?index=email&key=\<email>
+
+## Link to Demo Video
+
+We recorded a demo video of how we tested JKZDB. The Zoom link contains two recordings. Please refer to the **2nd recording** in the link, as the first recording was a trial run that got restarted. The video should be at least open to those with Yale emails. Please let us know by email if you cannot access the videos.
+
+[Demo Video](https://yale.zoom.us/rec/share/-gEcVIAw_wcCCZ002k7yWK0iNI7iuwDwX6rXKUFA7Ep70CPqtU-UFPAjJ1XcQghD.6pZaM3Gwc5MScC51)
 
 ## Group Work
 
-Matthew -
-Surtaz -
-Ross -
+Matthew - Debugged and wrote API handlers, wrote batch 2PC RPCs, worked on report
+Surtaz - Worked on 2PC RPCs, API handlers, worked on report
+Ross - Worked on creating JKZDB over BoltDB, 2PC RPCs, API handlers, worked on report
+
+As a group, we all discussed major design choices such as the database schema before implementing. We also constantly worked together and collaborated on code together over Zoom.
