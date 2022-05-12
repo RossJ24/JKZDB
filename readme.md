@@ -1,4 +1,6 @@
-# JKZDB
+# CPSC 426 Final Project: JKZDB
+
+JKZDB is a hash-sharded database over BoltDB that utilizes two-phase commit protocol to ensure atomic updates. JKZDB can be interacted with using a RESTful API implemented in Go that provides common features typically associated with bank accounts.
 
 ## Running the Database
 
